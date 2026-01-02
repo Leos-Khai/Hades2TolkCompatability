@@ -144,6 +144,42 @@ function OnMouseOverTrigger(triggerArgs)
     end
 
     if button.Id then
+        if ScreenAnchors ~= nil and ScreenAnchors.QuestLogScreen ~= nil and button.Screen == ScreenAnchors.QuestLogScreen then
+            thread(function()
+                wait(0.1)
+                if rom == nil or rom.tolk == nil or rom.tolk.get_lines_from_thing == nil then
+                    return
+                end
+                local baseLines = rom.tolk.get_lines_from_thing(button.Id)
+                local baseText = ""
+                if baseLines ~= nil then
+                    baseText = createCollection(baseLines)
+                end
+                local descLines = nil
+                if button.Screen and button.Screen.Components and button.Screen.Components.DescriptionBox then
+                    descLines = rom.tolk.get_lines_from_thing(button.Screen.Components.DescriptionBox.Id)
+                end
+                local descText = ""
+                if descLines ~= nil then
+                    descText = createCollection(descLines)
+                end
+                local combined = baseText
+                if descText and descText:match("%S") then
+                    if combined and combined:match("%S") then
+                        combined = combined .. " " .. descText
+                    else
+                        combined = descText
+                    end
+                end
+                if combined and combined:match("%S") then
+                    if rom.tolk.silence then
+                        rom.tolk.silence()
+                    end
+                    rom.tolk.output(combined)
+                end
+            end)
+            return
+        end
         -- For Cauldron (Ghost Admin) buttons, insert cost information between name and description
         if button.Data and button.Data.Cost and type(button.Data.Cost) == "table" and not button.Purchased then
             local lines = rom.tolk.get_lines_from_thing(button.Id)
