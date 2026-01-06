@@ -280,6 +280,258 @@ local function ConvertIconsToText(text)
 	return text
 end
 
+-- Wrapper function for MouseOverWeaponUpgrade to announce weapon aspect details via screen reader
+function wrap_MouseOverWeaponUpgrade(button)
+	-- Wait briefly for UI elements to fully populate
+	wait(0.2)
+
+	if not button then
+		return
+	end
+
+	local fullText = ""
+
+	-- Try to get weapon aspect information from button data
+	if button.Data then
+		local traitName = button.Data.TraitName or button.Data.Name
+
+		if traitName then
+			-- Get display name
+			local displayName = GetDisplayName({Text = traitName, IgnoreSpecialFormatting = true})
+			if displayName and displayName ~= "" then
+				fullText = displayName
+			else
+				fullText = traitName
+			end
+
+			-- Get trait data for aspect information
+			local traitData = TraitData and TraitData[traitName]
+
+			if traitData then
+				-- Add aspect name if available
+				if traitData.AspectName then
+					local aspectName = GetDisplayName({Text = traitData.AspectName, IgnoreSpecialFormatting = true})
+					if aspectName and aspectName ~= "" then
+						fullText = fullText .. ", " .. aspectName
+					end
+				end
+
+				-- Add weapon name if available
+				if traitData.WeaponName then
+					local weaponName = GetDisplayName({Text = traitData.WeaponName, IgnoreSpecialFormatting = true})
+					if weaponName and weaponName ~= "" then
+						fullText = fullText .. ", " .. weaponName
+					end
+				end
+
+				-- Add level/rank if available
+				if button.Data.Level or button.Data.Rank then
+					local level = button.Data.Level or button.Data.Rank
+					fullText = fullText .. ", Level " .. level
+				end
+
+				-- Add description
+				if traitData.TooltipText then
+					local tooltipText = GetDisplayName({Text = traitData.TooltipText, IgnoreSpecialFormatting = true})
+					if tooltipText and tooltipText ~= "" then
+						-- Clean up formatting
+						tooltipText = tooltipText:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+						tooltipText = ConvertIconsToText(tooltipText)
+						fullText = fullText .. ". " .. tooltipText
+					end
+				end
+			end
+		end
+	end
+
+	-- Fallback: Get text from button UI
+	if button.Id then
+		local lines = rom.tolk.get_lines_from_thing(button.Id)
+		if lines and #lines > 0 then
+			-- If we have no text yet, use the first line
+			if fullText == "" and lines[1] and lines[1] ~= "" then
+				fullText = lines[1]
+				fullText = fullText:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+				fullText = ConvertIconsToText(fullText)
+			end
+
+			-- Add additional lines
+			for i = 2, #lines do
+				local line = lines[i]
+				if line and line ~= "" then
+					line = line:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+					line = ConvertIconsToText(line)
+
+					if not fullText:find(line, 1, true) then
+						fullText = fullText .. ". " .. line
+					end
+				end
+			end
+		end
+	end
+
+	-- Speak via screen reader (ensure it's a string)
+	if fullText ~= "" and type(fullText) == "string" then
+		rom.tolk.silence()
+		rom.tolk.output(fullText)
+	end
+end
+
+-- Wrapper function for TraitTrayIconButtonMouseOver to announce trait details via screen reader
+function wrap_TraitTrayIconButtonMouseOver(button)
+	-- Wait briefly for UI elements to fully populate
+	wait(0.2)
+
+	if not button then
+		return
+	end
+
+	-- Build comprehensive announcement text
+	local fullText = ""
+	local itemName = nil
+	local itemData = nil
+	local rarity = nil
+	local hasName = false
+
+	-- Try to identify what type of item this is and get its data
+	if button.Data then
+		-- Try TraitName first (regular boons/traits)
+		if button.Data.TraitName then
+			itemName = button.Data.TraitName
+			itemData = TraitData and TraitData[itemName]
+			rarity = button.Data.Rarity or (itemData and itemData.Rarity)
+		-- Try Name field (generic fallback)
+		elseif button.Data.Name then
+			itemName = button.Data.Name
+			-- Try multiple data tables
+			itemData = (TraitData and TraitData[itemName]) or
+			          (MetaUpgradeData and MetaUpgradeData[itemName]) or
+			          (ShrineUpgradeData and ShrineUpgradeData[itemName]) or
+			          (KeepsakeData and KeepsakeData[itemName])
+			rarity = button.Data.Rarity or (itemData and itemData.Rarity)
+		end
+	end
+
+	-- Get name from button UI first (most reliable)
+	if button.Id then
+		local lines = rom.tolk.get_lines_from_thing(button.Id)
+		if lines and #lines > 0 and lines[1] and lines[1] ~= "" then
+			fullText = lines[1]
+			-- Clean it up
+			fullText = fullText:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+			fullText = ConvertIconsToText(fullText)
+			hasName = true
+		end
+	end
+
+	-- If no name from UI, try data lookup
+	if not hasName and itemName then
+		local displayName = GetDisplayName({Text = itemName, IgnoreSpecialFormatting = true})
+		if displayName and displayName ~= "" then
+			fullText = displayName
+			hasName = true
+		elseif itemName ~= "" then
+			fullText = itemName
+			hasName = true
+		end
+	end
+
+	-- Now add additional info if we have the data
+	if itemName and itemData then
+
+		-- 2. Source God (if available)
+		if itemData and itemData.God then
+			local godName = GetDisplayName({Text = itemData.God, IgnoreSpecialFormatting = true})
+			if godName and godName ~= "" then
+				fullText = fullText .. ", " .. godName
+			end
+		end
+
+		-- 3. Rarity
+		if rarity then
+			local rarityText = GetDisplayName({Text = "CardRarityIcon_" .. rarity, IgnoreSpecialFormatting = true})
+			if rarityText and rarityText ~= "" then
+				fullText = fullText .. ", " .. rarityText
+			end
+		end
+
+		-- 4. Weapon Aspect Name (if this is an aspect)
+		if itemData and itemData.AspectName then
+			local aspectName = GetDisplayName({Text = itemData.AspectName, IgnoreSpecialFormatting = true})
+			if aspectName and aspectName ~= "" then
+				fullText = fullText .. ", " .. aspectName
+			end
+		end
+
+		-- 5. Main Description
+		if itemData and itemData.TooltipText then
+			local tooltipText = GetDisplayName({Text = itemData.TooltipText, IgnoreSpecialFormatting = true})
+			if tooltipText and tooltipText ~= "" then
+				-- Clean up formatting
+				tooltipText = tooltipText:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+				tooltipText = ConvertIconsToText(tooltipText)
+				fullText = fullText .. ". " .. tooltipText
+			end
+		end
+
+		-- 6. Get processed trait data for effect values (only works for traits)
+		if itemData and TraitData and TraitData[itemName] then
+			local processedTrait = GetProcessedTraitData({
+				Unit = CurrentRun.Hero,
+				TraitName = itemName,
+				Rarity = rarity,
+				ForBoonInfo = true
+			})
+
+			if processedTrait and processedTrait.ExtractValues then
+				for _, extractData in ipairs(processedTrait.ExtractValues) do
+					if extractData.ExtractAs then
+						local propertyKey = extractData.ExtractAs
+						local propertyDisplay = GetDisplayName({Text = propertyKey, IgnoreSpecialFormatting = true})
+						if propertyDisplay and propertyDisplay ~= "" and propertyDisplay ~= propertyKey then
+							-- Clean formatting
+							propertyDisplay = propertyDisplay:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+							propertyDisplay = ConvertIconsToText(propertyDisplay)
+
+							-- Only add if not already in description
+							if not fullText:find(propertyDisplay, 1, true) then
+								fullText = fullText .. ". " .. propertyDisplay
+							end
+						end
+					end
+				end
+			end
+		end
+	end
+
+	-- 7. Add additional lines from button UI (description, stats, etc.)
+	if button.Id then
+		local lines = rom.tolk.get_lines_from_thing(button.Id)
+		if lines and #lines > 0 then
+			-- Start from line 2 (we already got the name from line 1 earlier)
+			for i = 2, #lines do
+				local line = lines[i]
+				if line and line ~= "" then
+					-- Clean up the line
+					line = line:gsub("{[^}]+}", ""):gsub("%(s%)", "s")
+					line = ConvertIconsToText(line)
+
+					-- Only add if not already in description
+					if not fullText:find(line, 1, true) then
+						fullText = fullText .. ". " .. line
+					end
+				end
+			end
+		end
+	end
+
+	-- Speak everything at once via screen reader (ensure it's a string)
+	if fullText ~= "" and type(fullText) == "string" then
+		rom.tolk.silence()
+		rom.tolk.output(fullText)
+	end
+end
+
 function createCollection(lines)
 	local collection = ""
 	for i = 1, #lines do

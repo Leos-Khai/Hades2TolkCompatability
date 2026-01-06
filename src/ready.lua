@@ -521,6 +521,24 @@ ModUtil.Path.Wrap("MouseOverTalentButton", function(base, button)
 	end
 end)
 
+-- Add text to TraitTray (Boon List) buttons when hovering over them
+ModUtil.Path.Wrap("TraitTrayIconButtonMouseOver", function(base, button)
+	-- Call base function first to set up trait details
+	base(button)
+
+	-- Add screen reader announcement (wait is built into the function)
+	wrap_TraitTrayIconButtonMouseOver(button)
+end)
+
+-- Add weapon aspect announcements when hovering over aspects in weapon upgrade screen
+ModUtil.Path.Wrap("MouseOverWeaponUpgrade", function(base, button)
+	-- Call base function first
+	base(button)
+
+	-- Add screen reader announcement
+	wrap_MouseOverWeaponUpgrade(button)
+end)
+
 -- Add description and gift count text to Book of Shadows (Codex) entries
 ModUtil.Path.Context.Wrap("CodexOpenChapter", function(screen, button)
 	local chapterName = button.ChapterName
